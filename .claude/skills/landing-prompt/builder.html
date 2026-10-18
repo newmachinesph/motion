@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>landing-prompt · builder</title>
+<style>
+  :root{
+    --bg:#f4f6f4;--panel:#fff;--ink:#14261f;--muted:#5b6660;--line:#d8ddd9;
+    --accent:#015d2d;--accent-soft:#e8f2ec;--warn:#8a4b1f;--stop:#7e302d;
+    --r:10px;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#0f1512;--panel:#161d19;--ink:#e8ece9;--muted:#9aa5a0;--line:#28322d;
+          --accent:#7fc79a;--accent-soft:#1b2b22;--warn:#d9a273;--stop:#e08b86}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;
+         align-items:baseline;gap:14px;flex-wrap:wrap;background:var(--panel)}
+  h1{font-size:17px;margin:0;letter-spacing:-.01em}
+  header p{margin:0;color:var(--muted);font-size:13px;max-width:70ch}
+  .app{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);height:calc(100vh - 58px)}
+  @media (max-width:900px){.app{grid-template-columns:1fr;height:auto}}
+  .pane{overflow-y:auto;padding:22px}
+  .out{background:var(--panel);border-left:1px solid var(--line)}
+  @media (max-width:900px){.out{border-left:0;border-top:1px solid var(--line)}}
+  fieldset{border:1px solid var(--line);border-radius:var(--r);padding:15px;margin:0 0 16px;background:var(--panel)}
+  legend{font-weight:600;font-size:13px;padding:0 6px}
+  label{display:block;font-size:13px;font-weight:500;margin:11px 0 5px}
+  label:first-of-type{margin-top:2px}
+  input[type=text],textarea,select{width:100%;font:inherit;padding:9px 10px;border:1px solid var(--line);
+    border-radius:7px;background:var(--bg);color:inherit;min-height:40px}
+  textarea{min-height:62px;resize:vertical}
+  .q{color:var(--muted);font-size:12px;font-style:italic;margin:2px 0 7px}
+  .opts{display:grid;gap:6px;margin-top:4px}
+  .opt{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);
+       border-radius:7px;cursor:pointer;background:var(--bg)}
+  .opt:hover{border-color:var(--accent)}
+  .opt input{margin:3px 0 0;flex:none}
+  .opt b{font-weight:600;font-size:13px;display:block}
+  .opt em{color:var(--muted);font-size:12px;display:block;font-style:normal}
+  .opt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+  .desc{font-style:italic;color:var(--accent)}
+  .sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:2px;
+      vertical-align:-1px;border:1px solid rgba(128,128,128,.35)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .verdict{font-size:10px;font-weight:700;letter-spacing:.06em;padding:2px 6px;border-radius:4px;
+           text-transform:uppercase;margin-left:6px}
+  .opt .verdict{display:inline-block;width:auto}
+  .v-adopt{background:var(--accent-soft);color:var(--accent)}
+  .v-watch{background:rgba(200,140,60,.16);color:var(--warn)}
+  .v-skip{background:rgba(180,60,60,.14);color:var(--stop)}
+  .bar{position:sticky;top:0;background:var(--panel);padding:0 0 12px;z-index:2;display:flex;
+       gap:6px;align-items:center;flex-wrap:wrap}
+  button{font:inherit;font-weight:600;font-size:12.5px;padding:8px 13px;border-radius:7px;
+         border:1px solid var(--line);background:var(--bg);color:inherit;cursor:pointer;min-height:38px}
+  button.primary{background:var(--accent);color:var(--panel);border-color:transparent}
+  button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  button:hover{border-color:var(--accent)}
+  pre{white-space:pre-wrap;word-wrap:break-word;font:12px/1.6 var(--mono);margin:0;background:var(--bg);
+      border:1px solid var(--line);border-radius:var(--r);padding:15px}
+  .count{color:var(--muted);font-size:12px;margin-left:auto}
+  .warnbox{border-left:3px solid var(--warn);background:rgba(200,140,60,.09);padding:9px 12px;
+           border-radius:0 7px 7px 0;font-size:12.5px;margin-top:10px;color:var(--muted)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ── stepper ─────────────────────────────────────────────── */
+  .rail{display:flex;gap:4px;margin:0 0 16px;flex-wrap:wrap}
+  .rail button{padding:6px 10px;min-height:34px;font-size:11.5px;font-weight:600;
+               border-radius:6px;display:flex;gap:6px;align-items:center}
+  .rail button[aria-current=true]{background:var(--accent);color:var(--panel);border-color:transparent}
+  .rail button[data-done=yes]:not([aria-current=true]){border-color:var(--accent);color:var(--accent)}
+  .rail .n{opacity:.55;font-variant-numeric:tabular-nums}
+  .stage{display:none}
+  .stage.on{display:block}
+  .stagehead{margin:0 0 12px}
+  .stagehead h2{font-size:15px;margin:0 0 3px;letter-spacing:-.01em}
+  .stagehead p{margin:0;color:var(--muted);font-size:12.5px;max-width:64ch}
+  .stagehead .role{font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+                   color:var(--accent);font-weight:700;display:block;margin-bottom:5px}
+  .nav{display:flex;gap:8px;align-items:center;margin-top:4px;padding-top:14px;
+       border-top:1px solid var(--line)}
+  .nav .sp{margin-left:auto}
+  .gatebox{border-left:3px solid var(--stop);background:rgba(180,60,60,.09);padding:9px 12px;
+           border-radius:0 7px 7px 0;font-size:12.5px;margin:12px 0 0;color:var(--muted)}
+  .gatebox b{color:var(--stop)}
+  .gatebox ul{margin:5px 0 0;padding-left:18px}
+  .gateok{border-left-color:var(--accent);background:var(--accent-soft)}
+  .gateok b{color:var(--accent)}
+  .metric{font:12px/1.5 var(--mono);color:var(--muted);margin-top:6px}
+  .metric b{color:var(--ink)}
+  .declined{border:1px dashed var(--line);border-radius:7px;padding:10px 12px;margin-top:10px}
+  .declined h4{margin:0 0 2px;font-size:12.5px;font-weight:600}
+  .declined .desc{font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>landing-prompt · builder</h1>
+  <p>Six gated stages, in the order a studio works. Each stands in for a role and must pass its
+  gate before the next opens. Emits the numbered folder — brief, content matrix, direction,
+  composition, DESIGN.md, and the buildable spec.</p>
+</header>
+
+<div class="app">
+  <div class="pane">
+    <div class="rail" id="rail"></div>
+    <form id="f">
+
+    <section class="stage on" data-stage="0">
+    <div class="stagehead"><span class="role">Discovery · strategist</span>
+      <h2>Stage 0 — Brief</h2>
+      <p>Answer these rather than asking them. A studio bills for discovery because the client
+      cannot answer unprompted — so decide, and have it corrected.</p></div>
+    <fieldset>
+      <legend>Brief</legend>
+      <label for="name">Business name</label>
+      <input type="text" id="name" value="Marigold" />
+      <label for="what">What it sells, in the buyer's words</label>
+      <textarea id="what">Home cleaning in Bristol — regular, deep and end-of-tenancy. Same cleaner every visit, fixed hourly price, book online in a minute.</textarea>
+      <label for="buyer">Buyer — who decides, what they fear, on what device</label>
+      <textarea id="buyer">A working household, 28–55, on a phone on a Sunday evening. Fear: a stranger in the house, a price that moves.</textarea>
+      <div class="row">
+        <div><label for="action">The one action</label><input type="text" id="action" value="A booking" /></div>
+        <div><label for="place">Place / market</label><input type="text" id="place" value="Bristol" /></div>
+      </div>
+      <label for="proof">Proof</label>
+      <textarea id="proof">Same-cleaner guarantee, £19/hr flat, DBS-checked and insured, 2,400 households, 4.9 from 1,860 reviews.</textarea>
+      <label for="anti">Anti-goal — the thing this page must NOT look like</label>
+      <textarea id="anti">Must not look like a franchise chain — no stock smiling call-centre headset, no corporate blue, no "solutions".</textarea>
+      <p class="q">The highest-value line and the most skipped. One sentence kills more bad
+      directions than a page of positive description.</p>
+    </fieldset>
+    </section>
+
+    <section class="stage" data-stage="1">
+    <div class="stagehead"><span class="role">Content · content strategist</span>
+      <h2>Stage 1 — Content matrix</h2>
+      <p>Late content is the largest cause of slipped launches, and designing against lorem
+      ipsum is why layouts break when real words arrive at twice the length. Write the copy
+      here and the spec carries it verbatim instead of the builder inventing it.</p></div>
+    <fieldset>
+      <legend>Copy deck</legend>
+      <label for="services">Services — one per line, <code>Title | body | from-price</code></label>
+      <textarea id="services" rows="7">Regular home clean | The same cleaner, the same day each week or fortnight. Kitchen, bathrooms, floors and surfaces, to a checklist you set once. | from £19/hr
+Deep clean | A one-off reset — inside the oven, behind the appliances, limescale, skirtings, window interiors and the tops of everything. | from £185
+End of tenancy | Inventory-standard, with a written checklist your agent will accept and a free re-clean if they do not. | from £245
+Oven clean | Dismantled, soaked and rebuilt on site. Racks, trays, door glass and the fan housing. | from £75
+Carpets and upholstery | Hot-water extraction that lifts what a vacuum leaves. Dry in about four hours. | from £45/room
+After-builders clean | Fine dust removal in two passes, because one pass never holds. Paint flecks, silicone residue and window frames. | from £320</textarea>
+      <label for="metrics">Metrics — <code>value | label</code></label>
+      <textarea id="metrics" rows="4">2,400 | households cleaned in Bristol
+4.9 | average from 1,860 reviews
+94% | keep the same cleaner past a year
+60 sec | to book, no call needed</textarea>
+      <label for="reviews">Reviews — <code>quote | name, area</code></label>
+      <textarea id="reviews" rows="4">Third company in two years and the first where the same person actually turns up. Rachel knows where things go now, which sounds small and is not. | Priya M., Bishopston
+The end-of-tenancy checklist got my full deposit back with no argument. The agent ticked it off in front of me. | Tom H., Southville
+Price is the price. No surcharge, no "the oven was extra", no chasing an invoice a month later. | Dan O., Clifton</textarea>
+      <label for="faq">FAQ — <code>question | answer</code></label>
+      <textarea id="faq" rows="6">Do I get the same cleaner every time? | Yes. You are matched once and that is your cleaner. If they are ill or on leave we tell you before the visit and you can move it rather than take a stranger.
+What if I am not happy with a clean? | Tell us within 48 hours and we re-clean the room free. No form, no assessment visit.
+Are your cleaners insured and checked? | Every cleaner is enhanced DBS-checked and we carry £5m public liability. Certificates are on file and we will send them.
+Do I need to be home? | No. Most customers leave a key safe. We log entry and exit times and you get a message when the clean is done.
+How do I cancel or move a visit? | Up to 24 hours before, free, from the link in your booking email. Inside 24 hours we charge half the visit.
+What does it cost? | £19 an hour for regular cleans, with fixed prices on deep, tenancy and oven work. Materials included. No call-out fee, no VAT surprise.</textarea>
+      <div class="row">
+        <div><label for="areas">Areas served — comma separated</label>
+          <input type="text" id="areas" value="Clifton, Redland, Bishopston, Southville, Totterdown, Henleaze" /></div>
+        <div><label for="source">Source of these figures</label>
+          <select id="source">
+            <option value="invented">Invented — mark every figure as a placeholder</option>
+            <option value="client">Client-supplied — real, may be published as fact</option>
+            <option value="researched">Researched — cite where each came from</option>
+          </select></div>
+      </div>
+      <div class="metric" id="cmetric"></div>
+    </fieldset>
+    </section>
+
+    <section class="stage" data-stage="2">
+    <div class="stagehead"><span class="role">Art direction · art director</span>
+      <h2>Stage 2 — Direction, and the sign-off</h2>
+      <p>The last cheap moment to redirect — nothing after this stage is cheap to change. Pick
+      one, and record why the two nearest alternatives were declined. A direction nobody
+      rejected anything for is a direction nobody chose.</p></div>
+    <fieldset>
+      <legend>Chosen direction</legend>
+      <p class="q">A four-to-six word image naming a <b>thing</b>, not a feeling. It fixes ground, mood, accent and density in one line — and every later value defends it.</p>
+      <div class="opts" id="style"></div>
+      <label for="why">Why this one — trace it to the brief, not to taste</label>
+      <textarea id="why">The buyer is checking legitimacy before price, on a phone, on a Sunday evening. A working document reads as accountable where a photographic hero reads as advertising.</textarea>
+      <div id="declines"></div>
+    </fieldset>
+    </section>
+
+    <section class="stage" data-stage="3">
+    <div class="stagehead"><span class="role">UX · information architect</span>
+      <h2>Stage 3 — Composition</h2>
+      <p>Archetype fixes the language. The six axes stop two briefs in one archetype landing on
+      the same page — answer each from the brief, not from preference.</p></div>
+    <fieldset>
+      <legend>Archetype</legend>
+      <p class="q">Chosen by category. Sets density floors, body line-height and motion.</p>
+      <div class="opts" id="arch"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Six axes</legend>
+      <p class="q">Two specs in the same archetype must differ in at least three of six.</p>
+      <div id="vars"></div>
+    </fieldset>
+    </section>
+
+    <section class="stage" data-stage="4">
+    <div class="stagehead"><span class="role">Build standards · tech lead</span>
+      <h2>Stage 4 — Mechanics and budget</h2>
+      <p>Every mechanic carries a verdict. A skip-rated item needs the brief to have asked for
+      it, and the spec records that it did.</p></div>
+    <fieldset>
+      <legend>Mechanics</legend>
+      <div class="opts" id="mech"></div>
+      <div class="warnbox" id="mechwarn" hidden></div>
+      <label for="justify">If a skip-rated mechanic is selected, what in the brief demanded it?</label>
+      <textarea id="justify" placeholder="Leave empty unless a skip-rated mechanic is checked."></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>Budget</legend>
+      <div class="row">
+        <div><label for="weight">Page weight (KB)</label><input type="text" id="weight" value="900" /></div>
+        <div><label for="stack">Stack</label>
+          <select id="stack">
+            <option>Vite + React 19 + TypeScript + Tailwind v4</option>
+            <option>Next.js 16 App Router + Tailwind v4</option>
+            <option>Astro 5 + Tailwind v4</option>
+            <option>Plain HTML + CSS, no framework</option>
+          </select></div>
+      </div>
+    </fieldset>
+    </section>
+
+    <section class="stage" data-stage="5">
+    <div class="stagehead"><span class="role">Handoff · design → engineering</span>
+      <h2>Stage 5 — Handoff</h2>
+      <p>Every gate above has passed. Take the bundle on the right — it is the numbered folder,
+      stages 00 to 05. Stages 6 to 8 (build, QA, launch) run outside this page; the checks are
+      written into the spec.</p></div>
+    <fieldset>
+      <legend>What happens next</legend>
+      <p class="q" style="font-style:normal">Save the bundle, split it on the <code>=== file:</code>
+      markers, then run stage 6 against <code>05-PROMPT.md</code> alone. If the build needs a
+      question answered, stage 5 failed and the answer goes back into the spec — not into the
+      build.</p>
+      <div class="metric" id="summary"></div>
+    </fieldset>
+    </section>
+
+    <div class="nav">
+      <button type="button" id="back">Back</button>
+      <button type="button" class="primary" id="next">Check gate and continue</button>
+      <span class="count sp" id="stageno"></span>
+    </div>
+    <div id="gate"></div>
+    </form>
+  </div>
+
+  <div class="pane out">
+    <div class="bar">
+      <button type="button" class="primary" id="copy">Copy</button>
+      <button type="button" id="dl">Download</button>
+      <span style="width:8px"></span>
+      <button type="button" data-v="bundle" aria-pressed="true">Bundle</button>
+      <button type="button" data-v="prompt" aria-pressed="false">PROMPT.md</button>
+      <button type="button" data-v="design" aria-pressed="false">DESIGN.md</button>
+      <button type="button" data-v="tw" aria-pressed="false">Tailwind</button>
+      <button type="button" data-v="css" aria-pressed="false">CSS vars</button>
+      <span class="count" id="count"></span>
+    </div>
+    <pre id="out"></pre>
+  </div>
+</div>
+
+<script>
+/* ── STYLES — descriptor + named colour roles + type + shape + do/don't ───────── */
+const STYLES = {
+  kraft:{d:"ledger on kraft paper, one ink",theme:"light",
+    dna:"A working document rather than a brochure. Warm paper ground, near-black ink, and a single burnt accent rationed to the things you can act on. Hairline rules instead of borders, flat surfaces instead of shadows, figures set in mono so a column of numbers lines up. The page reads like something printed and handed over.",
+    c:[["Kraft Paper","#f4f1ea","paper","Page canvas — the dominant ground, carrying roughly 70% of the surface area"],
+       ["Ink Black","#191712","ink","Primary text, filled button ground — the only dark surface in the system"],
+       ["Burnt Sienna","#b4491f","accent","Primary CTA, live figures, active states — the only chromatic surface; rationed to what the reader can act on"],
+       ["Oat","#e8e3d8","surface","Card fills, table stripes, input grounds — the quiet layer beneath paper"],
+       ["Stone","#6b665c","muted","Secondary copy, captions, helper text — the muted floor; nothing lighter carries text"],
+       ["Hairline","#d4cec1","rule","Dividers and non-interactive borders — never a text colour"],
+       ["Char","#3d3830","border-strong","Input and button borders — one step darker than Hairline so it clears 3:1"]],
+    disp:["Instrument Serif","GT Sectra, Source Serif 4, ui-serif/Georgia",[400],"1.08"],
+    body:["Inter","ui-sans-serif, system-ui",[400,450,500],"1.55"],
+    mono:["JetBrains Mono","ui-monospace, SFMono-Regular"],
+    ratio:["Major Third","1.25","16px"],
+    track:{90:"-0.045em",60:"-0.038em",44:"-0.03em",26:"-0.018em",16:"0"},
+    radius:{images:"4px",inputs:"4px",smallCards:"8px",cards:"12px",pill:"999px"},
+    struct:["12px on content cards","999px on buttons only"],
+    elev:"None. Hairline rules and flat fills carry every boundary.",
+    space:{density:"comfortable",unit:"4px",max:"1200px",section:"96px",card:"20px",el:"8px"},
+    do:["Set every figure in JetBrains Mono with `font-variant-numeric: tabular-nums` and tracking `0` — a column of numbers that does not align destroys the ledger idea.",
+        "Use Burnt Sienna only on the primary CTA, live values and active states. Three or four appearances per viewport, never as a section ground.",
+        "Use hairline rules for every divider. Reach for a border only where a control needs a 3:1 edge, and then use Char.",
+        "Keep the serif at weight 400 at every display size — the authority comes from size and tracking, not weight.",
+        "Tighten tracking as size climbs: −0.045em at 90px down to 0 at body."],
+    dont:["Don't add a shadow. The system is flat by construction; elevation would turn a printed document into an interface.",
+          "Don't introduce a second chromatic hue. Sienna against warm neutrals is the whole palette, and a blue or green breaks it immediately.",
+          "Don't set body copy in the serif. The serif is display-only — that division is the signature."]},
+
+  midnight:{d:"midnight control room, one live wire",theme:"dark",
+    dna:"An operator's screen at 2am. Near-black ground with two lifted surface steps, cool grey type, and one electric accent that appears only where something is live or actionable. Precise, dense, quiet. Radii are small, borders are visible, and nothing decorative competes with the data.",
+    c:[["Void","#0b0e11","paper","Page canvas — the dominant ground; every surface lifts from here"],
+       ["Deck","#141a1f","surface","Card and panel fills — the first lift, used for anything grouped"],
+       ["Console","#1c242b","surface-2","Nested panels, table headers, input grounds — the second and last lift"],
+       ["Signal Cyan","#3ddbd9","accent","Live values, primary CTA, focus ring — the only saturated colour; means 'this is live or you can act on it'"],
+       ["Frost","#e6edf3","ink","Primary text — cool near-white, never pure #fff, which glares on a dark ground"],
+       ["Haze","#8b98a5","muted","Secondary copy and labels — the muted floor on dark"],
+       ["Seam","#2a343d","rule","Dividers and panel borders — visible, because a dark UI needs its structure drawn"]],
+    disp:["Geist","Inter Tight, Inter, ui-sans-serif",[500,600],"1.06"],
+    body:["Inter","ui-sans-serif, system-ui",[400,450,500],"1.6"],
+    mono:["Geist Mono","ui-monospace, SFMono-Regular"],
+    ratio:["Major Third","1.25","15px"],
+    track:{90:"-0.05em",60:"-0.042em",44:"-0.034em",26:"-0.02em",15:"0"},
+    radius:{images:"8px",inputs:"6px",smallCards:"10px",cards:"14px",pill:"999px"},
+    struct:["14px on panels","6px on inputs"],
+    elev:"Two lifts only — Deck for grouped content, Console for nested. No blur-based shadow; a dark UI lifts with lightness, not shade.",
+    space:{density:"compact",unit:"4px",max:"1240px",section:"80px",card:"18px",el:"8px"},
+    do:["Lift surfaces with lightness (Void → Deck → Console), never with a white overlay or a shadow.",
+        "Reserve Signal Cyan for live values, the primary CTA and the focus ring. If it appears on something static, it has lied.",
+        "Set primary text in Frost, never `#ffffff` — pure white on near-black glares and fatigues at length.",
+        "Draw panel borders in Seam. On a dark ground, structure that is not drawn is not read.",
+        "Keep display at weight 500–600 and body at 400–450; the density does the work, not the weight."],
+    dont:["Don't use a drop shadow. Depth here is lightness, and a shadow on a near-black ground is invisible anyway — it only costs paint time.",
+          "Don't put Signal Cyan on a large fill. At scale it vibrates against the dark ground; it is a 40px-of-area colour.",
+          "Don't add a third surface step. Two lifts are the whole spatial system — a third makes nesting unreadable."]},
+
+  schoolyard:{d:"warm schoolyard notebook in soft crayon",theme:"light",
+    dna:"Friendly and hand-made without being childish. Cream ground, deep green slabs with rounded corners, and a saturated citrus accent. Bold geometric display, generous line-height, hand-drawn line marks scattered as punctuation. Photography sits in rounded frames, often rotated a degree or two so the page feels assembled by a person.",
+    c:[["Cream","#f7f5ee","paper","Page canvas — the ground that everything else sits on"],
+       ["Deep Pine","#14261f","slab","Full-block inverted sections at 32px radius — the structural rhythm of the page"],
+       ["Citrus","#d9e021","accent","Primary CTA, quote glyphs, active states — the only saturated colour; on light grounds it needs an ink label"],
+       ["Bark","#141210","ink","Primary text on cream"],
+       ["Moss","#5b6660","muted","Secondary copy — the muted floor; anything lighter fails contrast on cream"],
+       ["Chalk","#e6e2d6","surface","Card fills and metric tiles on the light ground"],
+       ["Hairline","#d5d0c2","rule","Dividers on light; on slabs use `#ffffff` at 16%"]],
+    disp:["Plus Jakarta Sans","Manrope, Satoshi, ui-sans-serif",[700,800],"1.12"],
+    body:["Inter","ui-sans-serif, system-ui",[400,500],"1.7"],
+    mono:["IBM Plex Mono","ui-monospace"],
+    ratio:["Major Third","1.25","16px"],
+    track:{90:"-0.045em",60:"-0.042em",44:"-0.034em",26:"-0.02em",16:"0"},
+    radius:{images:"16px",inputs:"8px",smallCards:"16px",cards:"20px",slabs:"32px",pill:"999px"},
+    struct:["32px on slabs","999px on buttons"],
+    elev:"One 3-stop fractional ramp, on lifted cards and collage frames only.",
+    space:{density:"comfortable",unit:"4px",max:"1200px",section:"96px",card:"20px",el:"10px"},
+    do:["Alternate cream and Deep Pine slabs down the page — that cadence is the structure, and it does more than any animation.",
+        "Rotate collage photographs deterministically by index, capped at ±5°, never randomly per render.",
+        "Keep display at weight 700 — a 400-weight display here reads as a law firm and loses the whole register.",
+        "Scatter two to four hand-drawn marks per hero at `stroke-width: 2`, `aria-hidden`, and never more.",
+        "Pair the Citrus CTA with a text link carrying a persistent underline, on the same row."],
+    dont:["Don't put Citrus behind body text. It is a fill-and-glyph colour; as a text ground it fails contrast at every size.",
+          "Don't use more than three slabs. Past that the alternation stops reading as rhythm and starts reading as stripes.",
+          "Don't use a drop shadow on the slabs. They are flat blocks of ground — a shadow makes them cards, which is a different system."]},
+
+  cathedral:{d:"cathedral of white space, hairline grid",theme:"light",
+    dna:"Restraint as the entire argument. Near-white ground, a single ink, and space doing the work that colour and shadow do elsewhere. Type is large and quiet; rules are hairline; the accent barely exists. Photography is locked in generous boxes and given room. The page is confident enough to leave two thirds of the screen empty.",
+    c:[["Snow","#fbfbfa","paper","Page canvas — near-white, warmer than #fff so long reading does not glare"],
+       ["Graphite","#111214","ink","Primary text and the filled button ground — the only dark in the system"],
+       ["Pewter","#6e7278","muted","Secondary copy, captions, metadata — the muted floor"],
+       ["Vellum","#f1f0ed","surface","Alternating section bands and card fills — one step off paper, no more"],
+       ["Hairline","#e3e1dc","rule","Every divider. The grid is drawn with these and nothing else"],
+       ["Cobalt","#2f4bd8","accent","Links, focus ring, one CTA — appears at most twice per viewport"]],
+    disp:["Instrument Serif","Tiempos Headline, Source Serif 4, ui-serif/Georgia",[400],"1.05"],
+    body:["Inter","ui-sans-serif, system-ui",[400,450],"1.65"],
+    mono:["IBM Plex Mono","ui-monospace"],
+    ratio:["Perfect Fourth","1.333","17px"],
+    track:{110:"-0.05em",78:"-0.04em",52:"-0.032em",26:"-0.016em",17:"0"},
+    radius:{images:"2px",inputs:"2px",smallCards:"0",cards:"2px",pill:"999px"},
+    struct:["2px everywhere","999px on buttons only"],
+    elev:"None. Space and hairlines carry every boundary.",
+    space:{density:"airy",unit:"4px",max:"1120px",section:"140px",card:"28px",el:"12px"},
+    do:["Let sections breathe at 140px. The space is the design — closing it up turns this into a generic minimal template.",
+        "Draw every boundary with a hairline. One weight of rule across the whole page.",
+        "Keep Cobalt to two appearances per viewport at most — a link and a CTA.",
+        "Set display at weight 400 and let size carry the hierarchy; the ratio is 1.333, so the steps are already wide."],
+    dont:["Don't add a second accent. The restraint is the entire argument and a second hue collapses it.",
+          "Don't round anything past 2px except buttons. Soft corners read as friendly, and this system is not.",
+          "Don't fill the empty space. If a section looks bare, the copy is too thin — fix the copy."]},
+
+  darkroom:{d:"darkroom product editorial, single spot",theme:"dark",
+    dna:"Product photography treated like gallery work. Near-black ground, warm off-white type, and a single amber spot used as a highlight rather than a brand colour. Images are large, uncropped and given generous margin. Type is a high-contrast serif at display and a neutral sans everywhere else.",
+    c:[["Pitch","#0d0c0b","paper","Page canvas — warm near-black, never neutral, so photography sits warm on it"],
+       ["Gallery","#171614","surface","Card and panel fills — the only lift"],
+       ["Bone","#efe9e0","ink","Primary text — warm off-white matching the ground's temperature"],
+       ["Ash","#928b81","muted","Captions, metadata, secondary copy — the muted floor on dark"],
+       ["Amber","#e2953f","accent","Focus ring, one CTA, active thumbnail — a spotlight, not a brand colour"],
+       ["Seam","#292521","rule","Hairlines and panel edges"]],
+    disp:["Instrument Serif","GT Sectra, Tiempos Headline, ui-serif/Georgia",[400],"1.04"],
+    body:["Inter","ui-sans-serif, system-ui",[400,450],"1.6"],
+    mono:["IBM Plex Mono","ui-monospace"],
+    ratio:["Perfect Fourth","1.333","16px"],
+    track:{104:"-0.048em",78:"-0.04em",52:"-0.03em",24:"-0.016em",16:"0"},
+    radius:{images:"0",inputs:"4px",smallCards:"4px",cards:"6px",pill:"999px"},
+    struct:["0 on images","6px on cards"],
+    elev:"One lift (Gallery). Photography never carries a shadow — it is the artwork, not a card.",
+    space:{density:"airy",unit:"4px",max:"1280px",section:"128px",card:"24px",el:"10px"},
+    do:["Present photography at radius 0, full width of its column, with no border and no shadow.",
+        "Match type temperature to the ground — Bone on Pitch, both warm. A cool white here reads as a bug.",
+        "Use Amber as a spotlight: focus ring, one CTA, the active thumbnail. Never a fill larger than a button.",
+        "Give every image at least 128px of vertical margin. Crowding is what separates a gallery from a grid."],
+    dont:["Don't crop photography to a fixed aspect across the page. Varying natural aspects is the editorial signal.",
+          "Don't use pure black. Pitch is warm, and true `#000` next to warm photography looks like a rendering error."]},
+
+  blueprint:{d:"technical blueprint on cold paper",theme:"light",
+    dna:"Engineering drawing rather than marketing page. Cool grey-white ground, a drawn grid at low opacity, ink-blue line work and mono labels throughout. Diagrams are authored, never photographed. Everything is measured, labelled and dimensioned — the aesthetic is a claim about how the product was built.",
+    c:[["Drafting","#f2f4f6","paper","Page canvas — cool grey-white with a drawn grid at 4% opacity"],
+       ["Ink Blue","#12294a","ink","Primary text and line work — the drawing colour"],
+       ["Slate","#5d6b7d","muted","Dimensions, labels, secondary copy — the muted floor"],
+       ["Vellum","#e7ebef","surface","Panel fills and table stripes"],
+       ["Rule","#cdd5dd","rule","Grid lines, dividers, diagram strokes"],
+       ["Red Pen","#c8341f","accent","Callouts, the primary CTA, error state — the correction colour, used sparingly"]],
+    disp:["Geist","Inter Tight, Inter, ui-sans-serif",[600],"1.08"],
+    body:["Inter","ui-sans-serif, system-ui",[400,450],"1.6"],
+    mono:["JetBrains Mono","ui-monospace, SFMono-Regular"],
+    ratio:["Minor Third","1.2","15px"],
+    track:{72:"-0.04em",54:"-0.032em",38:"-0.026em",22:"-0.014em",15:"0"},
+    radius:{images:"2px",inputs:"3px",smallCards:"3px",cards:"4px",pill:"3px"},
+    struct:["4px on panels","3px on controls — nothing in this system is round"],
+    elev:"None. The grid and the rules carry all structure.",
+    space:{density:"compact",unit:"4px",max:"1240px",section:"88px",card:"16px",el:"8px"},
+    do:["Label everything in mono at 12–13px with `letter-spacing: .08em` — the labelling is the aesthetic.",
+        "Author every diagram as inline SVG with visible dimension lines. A photograph in this system breaks the claim.",
+        "Keep the background grid at 4% opacity and `pointer-events: none`; it should be felt, not read.",
+        "Use Red Pen for callouts, the CTA and errors only — it is a correction mark, not a brand colour."],
+    dont:["Don't round anything past 4px. A pill button in a blueprint is a costume.",
+          "Don't use photography for product explanation. Authored diagrams are the entire point of this style."]}
+};
+
+const ARCH = {
+  warm:{n:"Warm service",cat:"trades · cleaning · home · care · local",floors:{blocks:10,imgs:45,rev:45,icons:25,words:1000},
+    body:"16 / 1.7",enter:"600ms",off:"16px",sig:"cut-out subject · rotated collage · doodles · rounded slabs · dot-grid",
+    blk:{trust:"accreditation and insurer marks in a muted row, plus a rating chip with the review count — legitimacy before price.",
+      about:"split with the rotated collage device, 3–5 photos at deterministic angles capped ±5°, check chips and a CTA.",
+      how:"3–4 steps, each with a plate 16:10, a step number, title and 60–90 words. Warm and concrete — what happens at the door.",
+      team:"portraits on the accent ground, first name and years served. **Initials on a colour field** where a person is named but not photographed.",
+      quotes:"accent quote glyph, bold one-line verdict, 2–3 line quote, avatar with name and neighbourhood."}},
+  saas:{n:"Product SaaS",cat:"dev tools · dashboards · B2B",floors:{blocks:10,imgs:30,rev:30,icons:25,words:900},
+    body:"14–15 / 1.7",enter:"600ms",off:"10px",sig:"product UI renders · pill eyebrow on a rule · sticky index · metric bento",
+    blk:{trust:"customer wordmarks in one row at 24px, greyscale until hover, plus the integration marks the product reads from.",
+      about:"a product UI render in a locked frame with 2–3 annotated callouts on hairline leaders — the interface is the argument, not a photograph of an office.",
+      how:"a sticky left index with 3–4 numbered stages; the right column swaps a UI frame per stage. No plates of people.",
+      team:"omit, or a single founder note set as a signed paragraph on the ground. A dev tool is not sold by headshots.",
+      quotes:"the customer's wordmark above the quote, engineer name and title beneath, one hard number pulled out at display scale."}},
+  corp:{n:"Corporate",cat:"consultancy · property · finance",floors:{blocks:9,imgs:40,rev:40,icons:20,words:950},
+    body:"15 / 1.3",enter:"1000ms",off:"20px",sig:"locked photographic plates · gradient scrims · translate-only reveals",
+    blk:{trust:"regulator, licence and membership marks in mono on a hairline row — no colour, no hover flourish.",
+      about:"a locked full-bleed plate with a gradient scrim and the studio statement over it, sized 21:9. No rotation, no collage.",
+      how:"a numbered process index, type-led, hairline rules between stages, one plate every second stage at most.",
+      team:"formal portraits on a neutral ground at a single crop, name, role and credential line. Grid of 3 or 4, never rotated.",
+      quotes:"one pull-quote per section at 26–32px over the ground, attributed to a named client and organisation. No avatars."}},
+  edit:{n:"Editorial",cat:"agency · portfolio · culture",floors:{blocks:8,imgs:18,rev:25,icons:12,words:1200},
+    body:"16 / 1.5",enter:"600ms",off:"16px",sig:"rules not borders · asymmetric grid · scale contrast · type as payload",
+    blk:{trust:"a set line of client and press names as type, separated by a middot rule. No logo images — the names are the marks.",
+      about:"asymmetric two-column: a long statement at 20px on the left third, one tall plate 3:4 breaking the grid on the right.",
+      how:"a numbered index set as type at display scale, one line each, hairline rule between. No step plates at all.",
+      team:"a name list at 22px with roles in the muted tone, one group photograph at 21:9 beneath. Individual headshots break the register.",
+      quotes:"a single quote at 32–44px in the display face, weight 400, set across two thirds, attributed on a new line after a rule."}}
+};
+const AXES=[
+ {k:"hero",t:"Hero shape",q:"Is there a person or object worth photographing on a plain ground?",o:[
+  ["split-cutout","Split + cut-out","Yes — copy left, knock-out bleeding past the right edge"],
+  ["centred-plate","Centred + plate","No, the work is the subject — centred copy, full-bleed plate below"],
+  ["full-bleed-scrim","Full-bleed + scrim","Location or scale is the sell — photo fills the block, copy over a scrim"],
+  ["stat-split","Stat split","The proof is numeric — copy left, metric tiles right"],
+  ["collage-hero","Collage hero","Many small jobs — copy left, 3–5 rotated photos right"],
+  ["list-hero","List hero","The offer IS a price list — first four rows live in the hero"]]},
+ {k:"rhythm",t:"Section rhythm",q:"How many blocks does the content actually justify?",o:[
+  ["alternating","Alternating","10–12 blocks · paper · slab · paper · slab"],
+  ["bookend","Bookend","8–9 blocks · slab hero, paper middle, slab close"],
+  ["banded","Banded","12+ blocks · two papers between slabs; slabs mark three acts"],
+  ["inverted","Inverted","Dark-first — slab is the default, paper blocks are accents"]]},
+ {k:"cards",t:"Card shape",q:"Does each offer have a visible result?",o:[
+  ["photo-top","Photo top","Yes — plate 4:3 · icon · title · body · price + arrow"],
+  ["icon-lead","Icon lead","No, abstract offer — 48px accent icon on a tinted square, no photo"],
+  ["numbered","Numbered","A sequence, not a menu — large mono number · rule · title"],
+  ["wide-row","Wide rows","More than eight offers — media left 200px, copy right"]]},
+ {k:"proof",t:"Proof block",q:"What is the single strongest piece of evidence?",o:[
+  ["tiles","Metric tiles","3–4 strong numbers, count-up on enter"],
+  ["bento","Metric + quote bento","Both good — 6-cell colour-blocked grid"],
+  ["logo-wall","Logo wall","Customers are recognisable — sourced marks, muted until hover"],
+  ["before-after","Before / after","The result is visual — paired plates"],
+  ["credential-row","Credential row","Buyer is checking legitimacy — licence, bond, insurance in mono"]]},
+ {k:"commercial",t:"Commercial block",q:"How does the business charge?",o:[
+  ["plans","Plan cards","Recurring, tiered — 2–3 cards, middle raised, toggle"],
+  ["price-rows","Price rows","Per-job flat rates — right-aligned mono figure column"],
+  ["from-grid","From-grid","Varies too much to publish — 'from £X' in the card foot"],
+  ["quote-only","Quote only","Genuinely bespoke — scoping form, and a sentence saying why"]]},
+ {k:"close",t:"Close",q:"What exactly is the action, and who takes it?",o:[
+  ["form-split","Form split","Booking or quote — form left, plate right"],
+  ["calendar","Calendar","The action is a slot — day/time picker with real states"],
+  ["call-first","Call first","Older buyer or urgent job — oversized tappable number"],
+  ["single-cta","Single CTA","Action lives off-site — one line, one button, space"]]}
+];
+const MECH=[
+ ["agent","Agent-readable structure","adopt","JSON-LD, heading outline, real text, llms.txt.",1],
+ ["perf","Performance budget","adopt","Stated in KB. INP punishes what maximalist lists celebrate.",1],
+ ["a11y","Accessibility as acceptance criteria","adopt","Measured contrast, visible focus, 48px targets.",1],
+ ["dark","Dark mode from system preference","adopt","Designed on purpose, not inverted.",1],
+ ["motion","Motion that explains","adopt","Entrance reveals, count-up, section fades.",1],
+ ["viewtrans","View Transitions API","adopt","Native section fades instead of a JS library.",0],
+ ["prefetch","Speculation-rules prefetch","adopt","The invisible half of predictive UX.",0],
+ ["bento","Bento grid","adopt","Only if every tile carries a real message.",0],
+ ["threed","3D / WebGL configurator","adopt","Only for a product the visitor rotates.",0],
+ ["realtime","Real-time figures","adopt","Live stock, delivery windows, the real price.",0],
+ ["glass","Glass surfaces","watch","Decorative yes; load-bearing careful.",0],
+ ["askbox","Conversational ask-box","watch","Justified on a large catalogue. A costume on five pages.",0],
+ ["scrolly","Scrollytelling","watch","One flagship page. Never the site-wide default.",0],
+ ["kinetic","Kinetic typography","watch","A little. A gimmick by week two.",0],
+ ["grain","Grain / hand-drawn marks","watch","Reads as human because AI output is polished by default.",0],
+ ["personal","Light personalisation","watch","Returning visitor, resumed form, local number.",0],
+ ["scrolljack","Scrolljacking","skip","The visitor owns their scroll wheel.",0],
+ ["herovideo","Heavy hero video","skip","Purrs on fibre, spins on a bus.",0],
+ ["carousel","Hero carousel","skip","Slide two is the least-read content on the internet.",0],
+ ["autochat","Auto-opening chat","skip","Simulates a pushy salesman.",0],
+ ["cursor","Custom cursor","skip","Friction cosplaying as delight.",0],
+ ["voice","Voice interface","skip","People talk to their assistant, not your homepage.",0],
+ ["emotion","Emotion-sensing UI","skip","Privacy liability wearing a futurism badge.",0]
+];
+
+/* ── build form ─────────────────────────────────────────────── */
+const $=s=>document.querySelector(s);
+function radios(host,name,items,checked){
+  host.innerHTML=items.map(([v,b,s])=>
+    `<label class="opt"><input type="radio" name="${name}" value="${v}"${v===checked?" checked":""}><span><b>${b}</b><em>${s}</em></span></label>`).join("");
+}
+radios($("#style"),"style",Object.entries(STYLES).map(([k,v])=>[k,
+  `${v.c.slice(0,4).map(c=>`<span class="sw" style="background:${c[1]}"></span>`).join("")} <span class="desc">${v.d}</span>`,
+  `${v.theme} · ${v.disp[0]} + ${v.body[0]} · ${v.ratio[0]} ${v.ratio[1]} from ${v.ratio[2]}`]),"schoolyard");
+radios($("#arch"),"arch",Object.entries(ARCH).map(([k,v])=>[k,v.n,v.cat]),"warm");
+$("#vars").innerHTML=AXES.map(a=>`<div style="margin-bottom:13px"><label style="margin-top:0">${a.t}</label>
+  <p class="q">${a.q}</p><div class="opts">${a.o.map(([v,b,s],i)=>
+  `<label class="opt"><input type="radio" name="${a.k}" value="${v}"${i===0?" checked":""}><span><b>${b}</b><em>${s}</em></span></label>`).join("")}</div></div>`).join("");
+$("#mech").innerHTML=MECH.map(([k,n,verd,d,on])=>
+  `<label class="opt"><input type="checkbox" name="m_${k}"${on?" checked":""} data-verdict="${verd}" data-n="${n}" data-d="${d}"><span><b>${n}<span class="verdict v-${verd}">${verd}</span></b><em>${d}</em></span></label>`).join("");
+
+/* ── content matrix ─────────────────────────────────────────── */
+const rows=id=>$("#"+id).value.split("\n").map(l=>l.trim()).filter(Boolean)
+  .map(l=>l.split("|").map(x=>x.trim()));
+function content(){
+  const c={services:rows("services"),metrics:rows("metrics"),reviews:rows("reviews"),faq:rows("faq"),
+    areas:$("#areas").value.split(",").map(x=>x.trim()).filter(Boolean),source:$("#source").value};
+  c.all=[...c.services,...c.metrics,...c.reviews,...c.faq].flat();
+  c.longest=c.all.reduce((m,x)=>Math.max(m,x.length),0);
+  c.longestTitle=c.services.reduce((m,r)=>Math.max(m,(r[0]||"").length),0);
+  c.words=c.all.join(" ").split(/\s+/).filter(Boolean).length;
+  /* a figure in an invented string is a claim the business cannot back */
+  c.claims=c.all.filter(x=>/\d/.test(x)&&!/^from |\/hr|\/room/.test(x)).length;
+  return c;
+}
+function cmetric(){
+  const c=content();
+  $("#cmetric").innerHTML=`<b>${c.services.length}</b> services · <b>${c.metrics.length}</b> metrics · `+
+    `<b>${c.reviews.length}</b> reviews · <b>${c.faq.length}</b> FAQ · <b>${c.areas.length}</b> areas<br>`+
+    `longest string <b>${c.longest}ch</b> · longest service title <b>${c.longestTitle}ch</b> · `+
+    `<b>${c.words}</b> words · <b>${c.claims}</b> strings carry a figure`;
+}
+
+/* ── declined directions — the sign-off record ──────────────── */
+function renderDeclines(){
+  const cur=val("style"), keys=Object.keys(STYLES).filter(k=>k!==cur).slice(0,2);
+  $("#declines").innerHTML=keys.map(k=>`<div class="declined">
+    <h4>Declined — <span class="desc">${STYLES[k].d}</span></h4>
+    <label for="dec_${k}" style="margin-top:7px">Why not this one</label>
+    <textarea id="dec_${k}" data-dec="${STYLES[k].d}" rows="2"></textarea></div>`).join("");
+  render();
+}
+
+/* ── generators ─────────────────────────────────────────────── */
+function val(n){const e=document.querySelector(`[name="${n}"]:checked`);return e?e.value:""}
+const slug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+function S(){return STYLES[val("style")]}
+function trackLines(s){return Object.entries(s.track).sort((a,b)=>b[0]-a[0])
+  .map(([px,v])=>`${v} at ${px}px`).join(" · ")}
+
+function designMd(){
+  const s=S(), name=$("#name").value.trim()||"Untitled";
+  const L=[];
+  L.push(`# ${name} — Style Reference`,"",`> ${s.d}`,"",`**Theme:** ${s.theme}`,"",s.dna,"");
+  L.push("## Tokens — Colors","","| Name | Value | Token | Role |","|---|---|---|---|");
+  s.c.forEach(([n,hex,tok,role])=>L.push(`| ${n} | \`${hex}\` | \`--color-${tok}\` | ${role} |`));
+  L.push("");
+  L.push("## Tokens — Typography","",`Scale: **${s.ratio[0]} (${s.ratio[1]})** from ${s.ratio[2]} base.`,"");
+  L.push(`### ${s.disp[0]} — display · \`--font-display\``,
+    `- **Substitute:** ${s.disp[1]}`,`- **Weights:** ${s.disp[2].join(", ")}`,
+    `- **Line height:** ${s.disp[3]}`,`- **Letter spacing:** ${trackLines(s)}`,"");
+  L.push(`### ${s.body[0]} — body, UI, navigation · \`--font-body\``,
+    `- **Substitute:** ${s.body[1]}`,`- **Weights:** ${s.body[2].join(", ")}`,
+    `- **Line height:** ${ARCH[val("arch")].body.split("/")[1].trim()}`,`- **Letter spacing:** 0 at body sizes`,"");
+  L.push(`### ${s.mono[0]} — figures, labels, code · \`--font-mono\``,
+    `- **Substitute:** ${s.mono[1]}`,`- **Letter spacing:** \`0\` on figures always — tracking breaks column alignment`,"");
+  L.push("## Spacing & Shape","",
+    `| | |`,`|---|---|`,
+    `| Density | ${s.space.density} |`,`| Base unit | ${s.space.unit} |`,`| Max width | ${s.space.max} |`,
+    `| Section gap | ${s.space.section} |`,`| Card padding | ${s.space.card} |`,`| Element gap | ${s.space.el} |`,"");
+  L.push("**Border radius**","");
+  Object.entries(s.radius).forEach(([k,v])=>L.push(`- ${k} · \`${v}\``));
+  L.push("",`**Structural radii:** ${s.struct.join(" · ")}. These two carry the system.`,"");
+  L.push("## Elevation","",s.elev,"");
+  L.push("## Guidelines","","**Do**","");
+  s.do.forEach(d=>L.push(`- ${d}`));
+  L.push("","**Don't**","");
+  s.dont.forEach(d=>L.push(`- ${d}`));
+  L.push("");
+  return L.join("\n");
+}
+function twTheme(){
+  const s=S(),L=["/* Tailwind v4 — drop into your CSS, no config file */","@theme {"];
+  s.c.forEach(([n,hex,tok])=>L.push(`  --color-${tok}: ${hex};   /* ${n} */`));
+  L.push("",`  --font-display: "${s.disp[0]}", ${s.disp[1]};`,
+           `  --font-body: "${s.body[0]}", ${s.body[1]};`,
+           `  --font-mono: "${s.mono[0]}", ${s.mono[1]};`,"");
+  Object.entries(s.radius).forEach(([k,v])=>L.push(`  --radius-${slug(k)}: ${v};`));
+  L.push("",`  --spacing: ${s.space.unit};`,
+           `  --container-page: ${s.space.max};`,
+           "  --default-transition-timing-function: cubic-bezier(.44,0,.56,1);",
+           "  --default-transition-duration: 240ms;","}");
+  return L.join("\n");
+}
+function cssVars(){
+  const s=S(),L=[":root {"];
+  s.c.forEach(([n,hex,tok])=>L.push(`  --color-${tok}: ${hex};   /* ${n} */`));
+  L.push("",`  --font-display: "${s.disp[0]}", ${s.disp[1]};`,
+           `  --font-body: "${s.body[0]}", ${s.body[1]};`,
+           `  --font-mono: "${s.mono[0]}", ${s.mono[1]};`,"");
+  Object.entries(s.track).sort((a,b)=>b[0]-a[0]).forEach(([px,v])=>L.push(`  --track-${px}: ${v};`));
+  L.push("");
+  Object.entries(s.radius).forEach(([k,v])=>L.push(`  --radius-${slug(k)}: ${v};`));
+  L.push("",`  --space-unit: ${s.space.unit};`,`  --space-section: ${s.space.section};`,
+           `  --space-card: ${s.space.card};`,`  --space-el: ${s.space.el};`,
+           `  --max-page: ${s.space.max};`,"",
+           "  --ease: cubic-bezier(.44,0,.56,1);",
+           `  --dur-state:150ms; --dur-hover:240ms; --dur-enter:${ARCH[val("arch")].enter};`,"}");
+  return L.join("\n");
+}
+function promptMd(){
+  const s=S(),a=ARCH[val("arch")],F=a.floors;
+  const name=($("#name").value.trim()||"UNTITLED").toUpperCase();
+  const v={};AXES.forEach(x=>v[x.k]=val(x.k));
+  const on=[...document.querySelectorAll('#mech input:checked')].map(i=>i.dataset);
+  const skips=on.filter(m=>m.verdict==="skip");
+  $("#mechwarn").hidden=!skips.length;
+  if(skips.length)$("#mechwarn").textContent=
+    `${skips.length} skip-rated mechanic${skips.length>1?"s":""} selected: ${skips.map(x=>x.n).join(", ")}. The spec records that the brief demanded each — if it did not, turn them off.`;
+  const blocks=Math.max(v.rhythm==="banded"?12:v.rhythm==="bookend"?9:11,F.blocks);
+  const hero={"split-cutout":"copy left 58%, knock-out subject bleeding to the block floor and past the right edge",
+    "centred-plate":"centred eyebrow, h1 at 18ch, one CTA, full-bleed 16:9 plate below the fold line",
+    "full-bleed-scrim":"photograph fills the block, gradient scrim bottom-left, copy over it",
+    "stat-split":"copy left, a 2×2 of metric tiles right instead of an image",
+    "collage-hero":"copy left, 3–5 rotated photos right as the collage device",
+    "list-hero":"copy left, the first four price rows live in the hero right"}[v.hero];
+  const L=[];
+  L.push(`# ${name} — landing page specification`,"");
+  L.push("## 0 · System","```");
+  L.push(`Style       ${s.d}  (${s.theme})`);
+  L.push(`Ground      ${s.c[0][0]} ${s.c[0][1]} · ink ${s.c.find(x=>x[2]==="ink")[0]} ${s.c.find(x=>x[2]==="ink")[1]} · accent ${(s.c.find(x=>x[2]==="accent")||s.c[2])[0]} ${(s.c.find(x=>x[2]==="accent")||s.c[2])[1]}`);
+  L.push(`Archetype   ${a.n} — ${a.cat}`);
+  L.push(`Type        ${s.disp[0]} display (${s.disp[2].join("/")}) + ${s.body[0]} body + ${s.mono[0]} figures`);
+  L.push(`            ${s.ratio[0]} ${s.ratio[1]} from ${s.ratio[2]} · body ${a.body} · tracking ${trackLines(s)}`);
+  L.push(`Shape       radius ${Object.entries(s.radius).map(([k,x])=>k+" "+x).join(" · ")}`);
+  L.push(`            structural: ${s.struct.join(" · ")} · elevation: ${s.elev}`);
+  L.push(`Space       ${s.space.density} · unit ${s.space.unit} · max ${s.space.max} · section ${s.space.section} · card ${s.space.card}`);
+  L.push(`Motion      150 state · 240 hover · ${a.enter} entrance · cubic-bezier(.44,0,.56,1) · stagger 80ms · translateY(${a.off})`);
+  L.push(`Breakpoints 1200 and 810`);
+  L.push(`Variants    hero:${v.hero} · rhythm:${v.rhythm} · cards:${v.cards} · proof:${v.proof} · commercial:${v.commercial} · close:${v.close}`);
+  L.push("```","",`> ${s.dna}`,"");
+  L.push("## 1 · Brief","```");
+  L.push(`Business  ${$("#what").value.trim()}`);
+  L.push(`Buyer     ${$("#buyer").value.trim()}`);
+  L.push(`Action    ${$("#action").value.trim()}`);
+  L.push(`Market    ${$("#place").value.trim()}`);
+  L.push(`Proof     ${$("#proof").value.trim()}`);
+  L.push("```","");
+  const C=content();
+  L.push("## 1b · Copy deck — verbatim, use these exact strings","",
+    `Source: **${C.source}**.`+(C.source==="invented"
+      ? ` Every figure below is a placeholder. **${C.claims} strings carry a number** — none may be presented as a verified fact; strip or soften any that names a licence, award, rating count or a real person.`
+      : " These are supplied and may be published as written."),"",
+    `Longest string **${C.longest}ch**, longest service title **${C.longestTitle}ch**. The layout must survive these, not the shortest example.`,"");
+  L.push("**Services**","");
+  C.services.forEach(r=>L.push(`- **"${r[0]}"** — "${r[1]||""}"${r[2]?` · foot: "${r[2]}"`:""}`));
+  L.push("","**Metrics**","");
+  C.metrics.forEach(r=>L.push(`- **"${r[0]}"** / "${r[1]||""}"`));
+  L.push("","**Reviews**","");
+  C.reviews.forEach(r=>L.push(`- "${r[0]}" — **${r[1]||"Anonymous"}**`));
+  L.push("","**FAQ**","");
+  C.faq.forEach(r=>L.push(`- **Q** "${r[0]}"`,`  **A** "${r[1]||""}"`));
+  L.push("",`**Areas served** — ${C.areas.map(x=>`"${x}"`).join(" · ")}`,"");
+  L.push("## 2 · Stack","",`${$("#stack").value}. Lenis for smooth scroll. No animation library. Fonts self-hosted, variable .woff2, font-display: swap.`,"",
+    "Banned: canvas, WebGL (unless a configurator is specified), blend modes, marquees, preloaders, hero carousels, auto-opening chat.","");
+  L.push("## 3 · Colour system","","| Name | Value | Token | Role |","|---|---|---|---|");
+  s.c.forEach(([n,hex,tok,role])=>L.push(`| ${n} | \`${hex}\` | \`--color-${tok}\` | ${role} |`));
+  L.push("","Ship OKLCH with these hex values as the `@supports not (color: oklch(0 0 0))` fallback. Verify every text pair against its actual ground, both themes: body ≥4.5:1, large ≥3:1, interactive borders ≥3:1.","");
+  L.push("## 4 · Density budget","",`| | Floor |`,`|---|---|`,
+    `| Blocks (\`<section>\`) | **${blocks}** |`,`| Visual payloads — \`img\`, authored UI frames, charts, logo rows, avatars | **${F.imgs}** |`,
+    `| Independently revealed elements | **${F.rev}** |`,`| Icon marks, one family | **${F.icons}** |`,
+    `| Words of real copy | **${F.words}** |`,"",
+    "**No block is type-only.** Every block carries a plate, a collage, a cut-out, a logo row, an avatar, or an accent icon per card.","");
+  L.push("## 5 · Assets","",
+    "Photos `picsum.photos/seed/<id>/<w>/<h>`, seeded for determinism. Avatars `i.pravatar.cc/240?img=<n>` for unnamed people only. Brand logos sourced from svgl / Simple Icons / a press kit — **never generated**. Doodles and icons authored inline SVG, one family, `currentColor`. `source.unsplash.com` is dead (503).","",
+    "**No placeholder carries a factual claim.** `alt=\"\"` + `role=\"presentation\"`, captions nominal only. **A named person gets initials on a colour field**, never a stock face. Every `<img>` has `width`, `height`, `loading` (`eager` + `fetchpriority=\"high\"` on the hero only), `decoding=\"async\"`, a locked `aspect-ratio` box, and a blur-up set from `onLoad` **and** `img.complete` on mount.","");
+  L.push("## 6 · Blocks","",`Rhythm **${v.rhythm}** · ${blocks} blocks.`,"",
+   `1. **Nav** — 72px / 64px ≤810, sticky, blur over 88% ground. Wordmark · links (hidden ≤810) · phone · accent CTA. Targets ≥48px.`,
+   `2. **Hero — ${v.hero}** — ${hero}. Eyebrow, h1 (≤15ch), lede (≤54ch), accent CTA + text link with a persistent underline, trust line. Stagger 80ms.`,
+   `3. **Trust strip** — ${a.blk.trust}`,
+   `4. **Services — ${v.cards}** — ${v.cards==="icon-lead"?"48px accent icon on a tinted square, title, body, arrow. No photo.":v.cards==="wide-row"?"full-width rows, media left 200px, copy right, hairline between.":v.cards==="numbered"?"large mono number, rule, title, body.":"plate 4:3, icon, title, 2–3 line body, foot with price and arrow."} Hover: ground lifts, plate scale(1.03) in a fixed box, arrow translateX(4px).`,
+   `5. **About** — ${a.blk.about}`,
+   `6. **Proof — ${v.proof}** — ${v.proof==="bento"?"6-cell asymmetric grid, colour-blocked, figures and quotes interleaved.":v.proof==="before-after"?"paired plates, static split.":v.proof==="logo-wall"?"sourced marks, two rows.":v.proof==="credential-row"?"licence, bond and insurance badges in mono.":"3–4 tiles, number at display scale, caption beneath, count-up on enter."}`,
+   `7. **How it works** — ${a.blk.how}`,
+   `8. **Team** — ${a.blk.team}`,
+   `9. **Testimonials** — ${a.blk.quotes}`,
+   `10. **Commercial — ${v.commercial}** — ${v.commercial==="plans"?"2–3 plan cards, middle raised with an accent border and a pill, toggle with a saving badge.":v.commercial==="price-rows"?"job + scope left, price and duration right in a mono column. `grid-template-columns: 1fr 76px`, tabular-nums, tracking 0 — each figure in its OWN fixed track so the column has one right edge.":v.commercial==="from-grid"?"service grid with 'from £X' in the card foot plus a quote CTA.":"no prices; a scoping form and an explicit sentence saying why."}`,
+   `11. **FAQ** — accordion, \`<button aria-expanded>\` + region, chevron rotates 180° in 240ms, first open. **Answers written in full.**`,
+   `12. **Close — ${v.close}** — ${v.close==="calendar"?"day/time picker with real states.":v.close==="call-first"?"oversized tappable number, form secondary.":v.close==="single-cta"?"one line, one button, a lot of space.":"form left, plate right."} Four form states as values: idle · submitting (\`aria-busy\`) · error (inline, \`aria-live=\"polite\"\`, never colour alone) · success (form replaced, focus moved with \`tabIndex={-1}\`).`,
+   `13. **Footer** — 4 columns, hours, legal, tappable phone, reduce-motion toggle setting \`data-motion="off"\` on \`<html>\`.`,"",
+   "**Write every word of copy verbatim** — every heading, card body, FAQ answer, label and error string. No `e.g.` — that is how a spec hides a gap and still looks finished.","");
+  L.push("## 7 · Guidelines — the signature","","**Do**","");
+  s.do.forEach(d=>L.push(`- ${d}`));
+  L.push("","**Don't**","");
+  s.dont.forEach(d=>L.push(`- ${d}`));
+  L.push("","Each rule names what breaks if it is ignored. A rule without the reason gets overridden by the next person who thinks bold looks stronger.","");
+  L.push("## 8 · Motion","",
+    `Lenis \`duration 1.05\`, expo-out, \`autoRaf:false\` with a manual RAF loop, destroyed in effect cleanup. **Not constructed at all** under \`prefers-reduced-motion\` or \`data-motion="off"\`. \`scroll-behavior: smooth\` removed from the reset — it fights Lenis.`,"",
+    `Entrance \`opacity .001 → 1\` + \`translateY(${a.off}) → 0\`, ${a.enter}, \`cubic-bezier(.44,0,.56,1)\`, stagger 80ms, max 6 per group, \`animation-timeline: view()\`, range \`entry 0% entry 40%\`.`,"",
+    "**Reveals fail open** — `.reveal { opacity:1; transform:none }` is the default; the animation only ever adds, inside `@supports (animation-timeline: view())`.","",
+    "No pinned scroll-scrub and no parallax. Recorded as a decision so the absence reads as intent.","");
+  L.push("## 9 · Mechanics — with verdicts","");
+  ["adopt","watch","skip"].forEach(g=>{
+    const set=on.filter(m=>m.verdict===g);if(!set.length)return;
+    L.push(`**${g.toUpperCase()}**`,"");
+    set.forEach(m=>L.push(`- **${m.n}** — ${m.d}${g==="watch"?" *The condition that justifies it must be named in the build.*":""}${g==="skip"?" **The brief explicitly asked for this; recorded so it is a decision, not drift.**":""}`));
+    L.push("");
+  });
+  L.push("## 10 · Agent-readable + performance","",
+    "One `h1`, a correct heading outline, every claim as real text — never baked into an image. `JSON-LD` for Organization, Service, offers/price, `areaServed` and `aggregateRating`. An `llms.txt` listing the page map.","",
+    "The plain answers exist as copy: what it is, where it operates, what it costs, how to make contact.","",
+    `**Budget: ${$("#weight").value.trim()}KB transferred**, AVIF or WebP, ≤2 font files (variable), zero third-party scripts. A mechanic that will not fit is cut at spec time, not discovered at launch.`,"");
+  L.push("## 11 · Accessibility","",
+    `Contrast measured, not eyeballed, against the actual ground, both themes. \`:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px }\` on every focusable element, never \`outline:none\`.`,"",
+    "Tap targets ≥48×48 with 8px separation — **including the reduce-motion toggle**, which is a real control. Labels above inputs, never placeholder-only. Errors as text with `aria-describedby` and `aria-live=\"polite\"`. Decorative marks `aria-hidden` and `pointer-events:none`.","");
+  L.push("## 12 · Gotchas","",
+    "- A class like `.hero__cutout` **loses to `.plate` if `.plate` is declared later** — same specificity, source order wins. Write `.plate.hero__cutout` and verify with `getComputedStyle().position`.",
+    "- **A `.wrap` inside a flex container shrink-wraps.** Give it `width:100%` or the copy column collapses and the headline wraps to four lines.",
+    "- Two adjacent same-ground blocks stack two full paddings and read as a hole. Collapse the boundary.",
+    "- `overflow: clip`, never `hidden`, on any ancestor of a sticky element, and no `transform` on those ancestors.",
+    "- **CSS math needs whitespace around `+` and `-`.** `clamp(2rem,1.3rem+2.2vw,2.9rem)` is invalid and the whole declaration is dropped — every fluid size silently falls back to the UA default. Write `1.3rem + 2.2vw`, and verify with `getComputedStyle(el).fontSize`.",
+    "- **`font:` shorthand dies on a bad `clamp()`**, taking family and weight with it. Prefer longhands for fluid type.",
+    "- Tailwind v4 preflight sets `--default-transition-timing-function` — override it in `@theme`.",
+    "- `margin-top:auto` only works on a **direct** flex child. On a grandchild (a `footer` inside a `figcaption`) it silently does nothing and card feet stop aligning.","");
+  L.push("## 13 · Acceptance checks","",
+    `Run against the **rendered DOM**, not \`dist/index.html\` — a client-rendered app ships an empty root and reports 0 images on a page with ${F.imgs}.`,"",
+    `1. \`$$("section").length\` ≥ **${blocks}** · visual payloads ≥ **${F.imgs}** (count \`img\` **plus** authored UI frames, chart rows and logo marks — a dev-tool page whose payload is real interface should not be padded with stock photography) · \`.reveal\` ≥ **${F.rev}** · \`svg\` ≥ **${F.icons}**.`,
+    "2. Images missing `width`/`height`/`loading`, or without a locked `aspect-ratio` parent: **0**.",
+    "3. Non-empty `alt` attributes: **none**, unless the image was looked at.",
+    "4. **Scroll each `.reveal` to the centre of the viewport, then read its opacity: 0 below 0.9.** Do NOT count `opacity:0` anywhere on the page — a `view()` timeline reverses on scroll-up, so that count flags a correct implementation. Then re-load under `prefers-reduced-motion` and with the motion toggle off: stranded elements **0** in both.",
+    "5. Font families ≤3. Breakpoint boundaries exactly 1200 and 810.",
+    "6. `scroll-behavior: smooth` in CSS: **0**. `html` carries `lenis`. Exactly one `h1`.",
+    "7. Tap targets under 44px: **0**.",
+    "8. At 390px: `body.scrollWidth <= innerWidth`, no element with `scrollWidth > clientWidth`, h1 + lede + CTA above 844px.",
+    "9. Under `prefers-reduced-motion`, `html` has no `lenis` class.",
+    `10. Transferred weight ≤ ${$("#weight").value.trim()}KB. Typecheck and build clean.`,
+    "11. **Screenshot the hero, three mid blocks, the footer and 390px — and look at them.** Counts passing is not the same as the page working.","");
+  L.push("## 14 · Mandate","",
+    `1. **The style: ${s.d}.** ${s.dont[0]}`,
+    `2. **${F.imgs} visual payloads, every card carrying one.** The instinct at block 9 will be to ship text cards — that is the failure this budget exists to prevent.`,
+    `3. **${a.n} signature: ${a.sig}.** Drop these and the page is a generic grid no matter how good the copy is.`,"");
+  return L.join("\n");
+}
+
+/* ── the bundle — stages 00 to 05 as one splittable file ────── */
+function file(n,body){return `\n\n=== file: ${n} ===\n\n`+body}
+function bundleMd(){
+  const s=S(),a=ARCH[val("arch")],C=content(),name=$("#name").value.trim()||"Untitled";
+  const decs=[...document.querySelectorAll("[data-dec]")].map(t=>[t.dataset.dec,t.value.trim()]);
+  const v={};AXES.forEach(x=>v[x.k]=val(x.k));
+  const L=[`# ${name} — pipeline bundle`,"",
+    "Split on the `=== file: ===` markers into a folder. Stages 6–8 (build, QA, launch) run",
+    "outside this document; their gates are written into `05-PROMPT.md` §13.",""];
+
+  L.push(file("00-brief.md",[`# Brief — ${name}`,"","```",
+    `Business   ${$("#what").value.trim()}`,`Buyer      ${$("#buyer").value.trim()}`,
+    `Action     ${$("#action").value.trim()}`,`Market     ${$("#place").value.trim()}`,
+    `Proof      ${$("#proof").value.trim()}`,`Anti-goal  ${$("#anti").value.trim()}`,"```","",
+    "**Gate passed** — six lines answered, anti-goal stated. Nothing downstream may violate it."].join("\n")));
+
+  const cl=["# Content matrix","",`Source: **${C.source}**.`,"",
+    "| Group | Count | Longest | Source |","|---|---|---|---|",
+    `| Services | ${C.services.length} | ${C.longestTitle}ch title | ${C.source} |`,
+    `| Metrics | ${C.metrics.length} | — | ${C.source} |`,
+    `| Reviews | ${C.reviews.length} | ${C.reviews.reduce((m,r)=>Math.max(m,(r[0]||"").length),0)}ch | ${C.source} |`,
+    `| FAQ | ${C.faq.length} | ${C.faq.reduce((m,r)=>Math.max(m,(r[1]||"").length),0)}ch answer | ${C.source} |`,
+    `| Areas | ${C.areas.length} | — | ${C.source} |`,"",
+    `Longest string overall **${C.longest}ch** — the design must survive this, not the demo case.`,"",
+    C.source==="invented"
+      ? `**${C.claims} strings carry a figure and are invented.** Each is a claim the business cannot back. They ship as placeholders and are flagged for the client to replace or remove. No licence number, award, rating count or named real person may be invented.`
+      : "Figures are supplied by the client and may be published as written.","",
+    "**Gate passed** — every group has a count and a longest-string figure; every invented figure is marked."];
+  L.push(file("01-content.md",cl.join("\n")));
+
+  L.push(file("02-direction.md",[`# Art direction — ${name}`,"",
+    `## Chosen`,"",`**${s.d}** — ${s.theme}`,"",s.dna,"",
+    `**Why** ${$("#why").value.trim()||"—"}`,"","## Declined","",
+    ...decs.map(([d,why])=>`- **${d}** — ${why||"—"}`),"",
+    "**Gate passed** — one direction chosen with its reason traced to the brief, two recorded as declined. This is the last cheap moment to redirect."].join("\n")));
+
+  L.push(file("03-composition.md",[`# Composition — ${name}`,"",
+    `**Archetype** ${a.n} — ${a.cat}. Signature: ${a.sig}`,"",
+    "| Axis | Question | Answer |","|---|---|---|",
+    ...AXES.map(x=>`| ${x.k} | ${x.q} | **${v[x.k]}** |`),"",
+    `Floors: ${a.floors.blocks} blocks · ${a.floors.imgs} images · ${a.floors.rev} reveals · ${a.floors.icons} icons · ${a.floors.words} words.`,"",
+    "**Gate passed** — six axes answered from the brief. Draw the lo-fi at 1440 and 390 before any hi-fi copy, and confirm the claim plus one action sit above the fold at both."].join("\n")));
+
+  L.push(file("04-system.md",designMd()));
+  L.push(file("05-PROMPT.md",promptMd()));
+  return L.join("\n");
+}
+
+/* ── gates ──────────────────────────────────────────────────── */
+const SEED={};
+["name","what","buyer","proof","services","metrics","reviews","faq"]
+  .forEach(k=>SEED[k]=$("#"+k).value.trim());
+
+const STAGES=[
+  {n:"Brief",role:"Discovery",gate(){const f=[];
+    [["name","business name"],["what","what it sells"],["buyer","the buyer"],
+     ["action","the one action"],["proof","proof"]].forEach(([id,l])=>{
+      if(!$("#"+id).value.trim())f.push(`${l} is empty`)});
+    const anti=$("#anti").value.trim();
+    if(anti.length<12)f.push("the anti-goal is empty or too short to kill a direction");
+    return f}},
+  {n:"Content",role:"Content strategy",gate(){const c=content(),f=[];
+    /* the sample copy is Marigold's. If the brief moved and the deck did not, the spec would
+       ship a cleaning price list under someone else's name — silently. */
+    const briefMoved=["what","buyer","proof","name"].some(k=>$("#"+k).value.trim()!==SEED[k]);
+    const deckMoved=["services","metrics","reviews","faq"].some(k=>$("#"+k).value.trim()!==SEED[k]);
+    if(briefMoved&&!deckMoved)f.push("the brief changed but the copy deck is still the sample copy — the spec would ship one business's words under another's name");
+    if(c.services.length<4)f.push(`only ${c.services.length} services — a services grid needs at least 4`);
+    if(c.services.some(r=>r.length<2))f.push("a service line is missing its body after the first `|`");
+    if(c.metrics.length<3)f.push(`only ${c.metrics.length} metrics — the proof block needs at least 3`);
+    if(c.reviews.length<2)f.push(`only ${c.reviews.length} reviews`);
+    if(c.faq.length<4)f.push(`only ${c.faq.length} FAQ pairs — an objection block needs at least 4`);
+    if(c.areas.length<3)f.push("fewer than 3 areas served");
+    return f}},
+  {n:"Direction",role:"Art direction",gate(){const f=[];
+    if(!$("#why").value.trim())f.push("no reason recorded for the chosen direction");
+    const decs=[...document.querySelectorAll("[data-dec]")];
+    const empty=decs.filter(t=>!t.value.trim()).length;
+    if(empty)f.push(`${empty} of ${decs.length} declined directions have no reason — a direction nobody rejected anything for is a direction nobody chose`);
+    return f}},
+  {n:"Composition",role:"UX",gate(){const f=[];
+    if(!val("arch"))f.push("no archetype chosen");
+    AXES.forEach(x=>{if(!val(x.k))f.push(`axis "${x.k}" unanswered`)});
+    return f}},
+  {n:"Mechanics",role:"Tech lead",gate(){const f=[];
+    const w=parseInt($("#weight").value,10);
+    if(!(w>0))f.push("page weight is not a number");
+    const skips=[...document.querySelectorAll('#mech input:checked')].filter(i=>i.dataset.verdict==="skip");
+    if(skips.length&&!$("#justify").value.trim())
+      f.push(`${skips.length} skip-rated mechanic(s) selected with no justification from the brief`);
+    return f}},
+  {n:"Handoff",role:"Handoff",gate(){const f=[],t=promptMd();
+    const w=t.trim().split(/\s+/).length;
+    if(w<2000)f.push(`spec is ${w} words, floor is 2,000`);
+    /* strip code spans first — the rule forbidding `e.g.` quotes it, and that is not a gap */
+    if(/\be\.g\./.test(t.replace(/`[^`]*`/g,"")))
+      f.push("the spec contains e.g. — write all of them, not one and an example");
+    return f}}
+];
+let stage=0, reached=0, carry="";
+function showStage(i){
+  stage=Math.max(0,Math.min(STAGES.length-1,i)); reached=Math.max(reached,stage);
+  document.querySelectorAll(".stage").forEach(el=>el.classList.toggle("on",+el.dataset.stage===stage));
+  $("#rail").innerHTML=STAGES.map((s,n)=>
+    `<button type="button" data-go="${n}" aria-current="${n===stage}" data-done="${n<reached?"yes":"no"}"
+      ${n>reached?"disabled":""}><span class="n">${String(n).padStart(2,"0")}</span> ${s.n}</button>`).join("");
+  $("#rail").querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>showStage(+b.dataset.go));
+  $("#back").disabled=stage===0;
+  $("#next").textContent=stage===STAGES.length-1?"Gate check":"Check gate and continue";
+  $("#stageno").textContent=`stage ${stage} of ${STAGES.length-1} · ${STAGES[stage].role}`;
+  $("#gate").innerHTML=carry; carry="";
+  if(stage===5)$("#summary").innerHTML=
+    `<b>${content().words}</b> words of real copy carried · spec <b>${promptMd().trim().split(/\s+/).length}</b> words · `+
+    `<b>${(bundleMd().match(/^=== file: .+ ===$/gm)||[]).length}</b> files in the bundle`;
+  render();
+}
+$("#next").onclick=()=>{
+  const f=STAGES[stage].gate();
+  if(f.length){$("#gate").innerHTML=`<div class="gatebox"><b>Gate ${stage} — ${STAGES[stage].n} — not passed.</b><ul>${f.map(x=>`<li>${x}</li>`).join("")}</ul></div>`;return}
+  const ok=`<div class="gatebox gateok"><b>Gate ${stage} — ${STAGES[stage].n} — passed.</b></div>`;
+  $("#gate").innerHTML=ok;
+  if(stage<STAGES.length-1){carry=ok;setTimeout(()=>showStage(stage+1),260)}
+};
+$("#back").onclick=()=>showStage(stage-1);
+
+/* ── view switching ─────────────────────────────────────────── */
+let view="bundle";
+const GEN={bundle:bundleMd,prompt:promptMd,design:designMd,tw:twTheme,css:cssVars};
+const EXT={bundle:"-bundle.md",prompt:"-PROMPT.md",design:"-DESIGN.md",tw:"-theme.css",css:"-tokens.css"};
+document.querySelectorAll(".bar [data-v]").forEach(b=>b.onclick=()=>{
+  view=b.dataset.v;
+  document.querySelectorAll(".bar [data-v]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+  render();
+});
+function render(){
+  promptMd();                       // always run so the skip warning stays current
+  const txt=GEN[view]();
+  $("#out").textContent=txt;
+  $("#count").textContent=txt.trim().split(/\s+/).length+" words · "+txt.split("\n").length+" lines";
+  window.__txt=txt;
+}
+$("#f").addEventListener("input",()=>{cmetric();render()});
+$("#f").addEventListener("change",e=>{
+  if(e.target.name==="style"){renderDeclines();return}
+  cmetric();render();
+});
+$("#copy").onclick=async()=>{await navigator.clipboard.writeText(window.__txt);
+  $("#copy").textContent="Copied";setTimeout(()=>$("#copy").textContent="Copy",1400)};
+$("#dl").onclick=()=>{const b=new Blob([window.__txt],{type:"text/plain"});
+  const u=URL.createObjectURL(b),el=document.createElement("a");
+  el.href=u;el.download=slug($("#name").value.trim()||"untitled")+EXT[view];el.click();URL.revokeObjectURL(u)};
+renderDeclines();
+cmetric();
+showStage(0);
+</script>
+</body>
+</html>

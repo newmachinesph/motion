@@ -1,0 +1,91 @@
+# Prompt Studio
+
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![React](https://img.shields.io/badge/React-19-61dafb) ![TypeScript](https://img.shields.io/badge/TypeScript-blue) ![Vite](https://img.shields.io/badge/Vite-8-646cff) ![Tailwind](https://img.shields.io/badge/Tailwind-4-38bdf8)
+
+A dynamic frontend for turning a website brief into a coherent, build-ready prompt for Framer, coding agents, visual builders, Figma, Webflow, or plain HTML/CSS.
+
+## Run it
+
+On Windows, double-click `start.bat` or run:
+
+```powershell
+.\start.bat
+```
+
+This launcher uses `npm.cmd`, so it also works when PowerShell blocks the `npm.ps1` shim.
+
+Alternatively:
+
+```bash
+npm install
+npm run dev
+```
+
+From a PowerShell session with restricted script execution, use:
+
+```powershell
+npm.cmd install
+npm.cmd run dev
+```
+
+Open `http://localhost:5173` after the server starts.
+
+Production checks:
+
+```bash
+npm run verify
+npm run typecheck
+npm run build
+```
+
+Ten-site calibration run:
+
+```bash
+npm run benchmark
+npm run benchmark:qa
+```
+
+The benchmark generates ten real responsive sites and their prompts in `C:\Users\Developer\Desktop\projects\prompt-studio-benchmark`, then captures desktop/mobile viewport evidence and checks identity, purpose, CTA fit, overflow, missing media and console errors.
+
+Multi-page SaaS calibration:
+
+```bash
+npm run benchmark:saas
+npm run benchmark:saas:qa
+```
+
+This generates seven separately addressable Rivetline routes in `C:\Users\Developer\Desktop\projects\rivetline-saas`, using a Codex Images logo directly without vector tracing. QA renders every route at desktop and mobile sizes, crawls internal links and exercises pricing, filtering and form states.
+
+## What it does
+
+- Routes 11 website species into different content and section architectures.
+- Captures audience, network, accessibility, locale, brand traits and anti-goals.
+- Requires reference intent—what to borrow, adapt or avoid—rather than accepting unbounded mood links.
+- Recommends motion from the subject and delivery constraints.
+- Runs a traditional studio model with accountable strategy, creative direction, art direction, UX, identity, type, content, interaction, systems, critique and design-engineering roles.
+- Commissions three to five independent creative territories and applies a six-axis similarity veto across topology, typography, palette/value, image language, shape grammar and motion logic.
+- Requires written critiques, a decision log, art-direction studies and approved desktop/interior/mobile/state keyframes before implementation can begin.
+- Generates seeded creative directions with direction-owned grids and shape systems instead of one universal 12-column template.
+- Creates a subject-specific logo strategy with a choice between original Codex Images output or editable vector construction, responsive lockups, usage rules and an identity swap test.
+- For multi-page mode, requires a route manifest with a path, page job and unique payload for every route; generates template-depth, navigation, journey and link-crawl contracts.
+- Lets users lock color, type, composition or motion and reroll the rest.
+- Compiles target-specific prompts for six receiving tools.
+- Autosaves locally and imports/exports reusable JSON briefs.
+- Exports a complete `PROMPT.md` with opening-viewport budgets, website-specific asset plans, singular motion hierarchy, tokens, content, responsive, accessibility, performance and acceptance checks.
+
+## Architecture
+
+- `src/lib/types.ts` — shared project and direction schema.
+- `src/lib/data.ts` — site types, conditional section sets, mechanic contracts, palettes and typography systems.
+- `src/lib/generator.ts` — recommendations, seeded art direction, lock-aware rerolling, quality gates and prompt compilation.
+- `src/App.tsx` — eight-stage product flow and persistence, including the project-room operating model.
+- `src/components/` — form controls, stage navigation, direction controls and live prompt preview.
+- `scripts/verify-generator.ts` — cross-category compiler verification.
+- `scripts/run-benchmark.ts` and `scripts/benchmark/` — ten-category builds, logo SVGs, visual rubric and responsive browser QA.
+- `scripts/run-saas-multipage.ts` and `scripts/saas-multipage/` — seven-route SaaS build, untraced Codex Image identity and cross-route interaction QA.
+
+The `.claude/skills` folder holds third-party agent skills kept as research material (see `skills-lock.json` for sources: `nextlevelbuilder/ui-ux-pro-max-skill` and `anthropics/skills`); they remain under their own licenses, including the Apache-2.0 `LICENSE.txt` files shipped in some skill folders.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Third-party skills under `.claude/skills` keep their original licenses. Bundled fonts in `public/fonts` (Big Shoulders, DM Mono, Instrument Sans) are distributed under their own open font licenses.

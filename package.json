@@ -1,0 +1,36 @@
+{
+  "name": "prompt-studio",
+  "private": true,
+  "license": "MIT",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "verify": "tsx scripts/verify-generator.ts",
+    "benchmark": "tsx scripts/run-benchmark.ts",
+    "benchmark:qa": "tsx scripts/benchmark/qa.ts",
+    "benchmark:saas": "tsx scripts/run-saas-multipage.ts",
+    "benchmark:saas:qa": "tsx scripts/qa-saas-multipage.ts",
+    "qa:studio": "tsx scripts/qa-studio.ts",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "motion": "^13.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "playwright": "^1.62.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  }
+}
